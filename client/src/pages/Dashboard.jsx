@@ -54,7 +54,7 @@ export default function Dashboard() {
           <h2>Your first mock interview is <span className="serif grad-text">three steps away.</span></h2>
           <p>Rehearse writes questions from your resume, listens to your spoken answers and tells you exactly how to improve.</p>
           <ol className="checklist">
-            <li><span className="check-num">1</span>Upload your resume (PDF or DOCX)</li>
+            <li><span className="check-num">1</span><span><Link to="/app/resumes">Upload your resume</Link> (PDF or DOCX)</span></li>
             <li><span className="check-num">2</span>Pick a role, interview style and difficulty</li>
             <li><span className="check-num">3</span>Answer each question out loud</li>
           </ol>

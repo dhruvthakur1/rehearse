@@ -20,6 +20,35 @@ export class ApiError extends Error {
   }
 }
 
+// Multipart upload with progress (fetch can't report upload progress).
+export function uploadFile(path, file, { field = 'file', onProgress } = {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${BASE_URL}/api${path}`);
+    const token = tokenStore.get();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+    };
+    xhr.onerror = () => reject(new ApiError(0, 'Could not reach the server. Check your connection and try again.'));
+    xhr.onload = () => {
+      let data = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        /* non-JSON error page */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else reject(new ApiError(xhr.status, data.error || `Upload failed (${xhr.status})`, data.details));
+    };
+
+    const form = new FormData();
+    form.append(field, file);
+    xhr.send(form);
+  });
+}
+
 export async function api(path, { method = 'GET', body } = {}) {
   const headers = {};
   const token = tokenStore.get();

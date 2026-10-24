@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import mongoose from 'mongoose';
 import { config } from './config.js';
 import authRoutes from './routes/auth.js';
+import resumeRoutes from './routes/resumes.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
 export function createApp() {
@@ -28,6 +29,7 @@ export function createApp() {
   });
 
   app.use('/api/auth', authRoutes);
+  app.use('/api/resumes', resumeRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -7,6 +7,8 @@
   background: rgba(255, 255, 255, 0.4); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
   border-right: 1px solid var(--glass-border);
 }
+/* Beats the generic `.page > *` rule that lifts content above the background blobs. */
+.page > .app-side { position: sticky; z-index: 5; }
 .app-side-brand { padding: 0 8px; }
 .app-nav { display: flex; flex-direction: column; gap: 4px; }
 .side-link {

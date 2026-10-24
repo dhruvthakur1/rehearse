@@ -65,7 +65,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .logo:hover { color: var(--ink); }
 
 /* ---- Background blobs ---- */
-.page { position: relative; min-height: 100vh; overflow: hidden; }
+/* overflow: clip (not hidden) keeps the blobs contained without breaking position: sticky. */
+.page { position: relative; min-height: 100vh; overflow: hidden; overflow: clip; }
 .page > *:not(.blobs) { position: relative; z-index: 1; }
 .blobs { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
 .blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.6; }

@@ -14,12 +14,22 @@ every answer using the Gemini API.
 | Backend  | Node.js, Express 5, Mongoose, Zod validation, Helmet, rate limiting |
 | Data     | MongoDB                                                      |
 | AI       | Gemini API (question generation, transcription, evaluation)  |
+| Files    | Multer (in-memory uploads), unpdf (PDF text), mammoth (DOCX text) |
 | DevOps   | Docker, GitHub Actions CI                                    |
+
+## How resume upload works
+
+1. The browser checks the file type and size, then uploads it with a progress bar.
+2. The API keeps the file in memory only (never on disk), checks the file's real signature bytes so a renamed file
+   can't sneak through, and extracts the text with `unpdf` (PDF) or `mammoth` (DOCX).
+3. Scanned, image-only PDFs are detected (no text layer) and rejected with a helpful message.
+4. Only the extracted text is stored, with detected skills and resume sections. The full text is returned only by
+   `GET /api/resumes/:id`, never in lists.
 
 ## Roadmap
 
 - [x] **Phase 1** — Project setup, sign-up / sign-in, one-click demo account, app layout
-- [ ] **Phase 2** — Resume upload and text extraction (PDF, DOCX)
+- [x] **Phase 2** — Resume upload (drag and drop, PDF/DOCX), text extraction, skill and section detection
 - [ ] **Phase 3** — Interview setup and Gemini question generation
 - [ ] **Phase 4** — Mock interview screen with voice recording
 - [ ] **Phase 5** — Speech-to-text and transcript review
