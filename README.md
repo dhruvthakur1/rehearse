@@ -59,3 +59,7 @@ cd server && npm install && npm run dev     # API on http://localhost:4000
 cd client && npm install && npm run dev     # App on http://localhost:5173
 cd server && npm test                       # API tests
 ```
+
+## Deploy
+
+See [DEPLOY.md](DEPLOY.md) — GitHub → Render (Docker API) → Vercel (frontend), with MongoDB Atlas and the Gemini API.
