@@ -24,6 +24,7 @@ const answer = (auth, interview, qIndex, { buffer = webm(), durationSec = 42, co
     .put(`/api/interviews/${interview.id}/questions/${interview.questions[qIndex].id}/answer`)
     .set(auth)
     .field('durationSec', String(durationSec))
+    .field('browserTranscript', 'I would start by profiling the slow endpoint and checking the database indexes.')
     .attach('audio', buffer, { filename: 'answer.webm', contentType });
 
 describe('answering questions', () => {

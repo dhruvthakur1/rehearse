@@ -18,6 +18,41 @@ const answerSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const skillsSchema = new mongoose.Schema(
+  { relevance: Number, depth: Number, clarity: Number, structure: Number },
+  { _id: false }
+);
+
+const evaluationSchema = new mongoose.Schema(
+  {
+    score: Number,
+    skills: skillsSchema,
+    whatWorked: String,
+    toImprove: String,
+    modelAnswer: String,
+  },
+  { _id: false }
+);
+
+const reportSchema = new mongoose.Schema(
+  {
+    status: { type: String, enum: ['pending', 'ready', 'failed'], default: 'pending' },
+    generatedBy: { type: String, enum: ['gemini', 'sample'] },
+    overallScore: Number,
+    verdict: String,
+    skills: skillsSchema,
+    headline: String,
+    summary: String,
+    strengths: [String],
+    improvements: [String],
+    answeredCount: Number,
+    requestedAt: Date,
+    evaluatedAt: Date,
+    error: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
 const questionSchema = new mongoose.Schema(
   {
     order: { type: Number, required: true },
@@ -28,6 +63,7 @@ const questionSchema = new mongoose.Schema(
     // What a strong answer covers; shown as a hint during the interview and used when scoring.
     idealPoints: [{ type: String }],
     answer: { type: answerSchema, default: undefined },
+    evaluation: { type: evaluationSchema, default: undefined },
   },
   { _id: true }
 );
@@ -48,6 +84,7 @@ const interviewSchema = new mongoose.Schema(
     generatedBy: { type: String, enum: ['gemini', 'sample'], required: true },
     startedAt: Date,
     completedAt: Date,
+    report: { type: reportSchema, default: undefined },
   },
   { timestamps: true }
 );
@@ -59,9 +96,10 @@ interviewSchema.set('toJSON', {
     delete ret.__v;
     delete ret.user;
     delete ret.jobDescription;
-    ret.questions = ret.questions?.map(({ _id, answer, ...q }) => ({
+    ret.questions = ret.questions?.map(({ _id, answer, evaluation, ...q }) => ({
       id: _id.toString(),
       ...q,
+      evaluation: evaluation ?? null,
       // The audio's database id stays internal; clients fetch it through the question's audio URL.
       answer: answer
         ? {
@@ -81,6 +119,7 @@ interviewSchema.set('toJSON', {
       skipped: answered.filter((q) => q.answer.skipped).length,
       total: ret.questions?.length ?? 0,
     };
+    ret.report = ret.report ?? null;
     return ret;
   },
 });

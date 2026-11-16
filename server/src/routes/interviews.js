@@ -10,6 +10,7 @@ import { validate } from '../middleware/validate.js';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
 import { MAX_ANSWER_SECONDS, MAX_AUDIO_BYTES, detectAudioFormat } from '../lib/audio.js';
 import { MAX_TRANSCRIPT_CHARS, transcribeAnswer } from '../lib/transcribe.js';
+import { isStalePending, runEvaluation } from '../lib/runEvaluation.js';
 import { DIFFICULTIES, INTERVIEW_TYPES, QUESTION_COUNTS, generateQuestions } from '../lib/questions.js';
 import { aiEnabled } from '../lib/gemini.js';
 import { config } from '../config.js';
@@ -85,7 +86,13 @@ async function findOwnInterview(req) {
 }
 
 router.get('/:id', async (req, res) => {
-  res.json({ interview: await findOwnInterview(req) });
+  const interview = await findOwnInterview(req);
+  // An analysis that never finished (e.g. the server restarted) becomes retryable.
+  if (isStalePending(interview.report)) {
+    interview.report = { status: 'failed', requestedAt: interview.report.requestedAt, error: 'The analysis was interrupted. Please try again.' };
+    await interview.save();
+  }
+  res.json({ interview });
 });
 
 router.delete('/:id', async (req, res) => {
@@ -252,16 +259,42 @@ router.get('/:id/questions/:qid/audio', async (req, res) => {
 router.post('/:id/finish', async (req, res) => {
   const interview = await findOwnInterview(req);
   assertNotCompleted(interview);
-  if (!interview.questions.some((q) => q.answer && !q.answer.skipped)) {
-    throw badRequest('Answer at least one question before finishing');
+  if (!interview.questions.some((q) => q.answer && !q.answer.skipped && q.answer.transcript?.trim())) {
+    throw badRequest('Answer at least one question (and check its transcript) before finishing');
   }
   for (const q of interview.questions) {
     if (!q.answer) q.answer = { skipped: true, recordedAt: new Date() };
   }
   interview.status = 'completed';
   interview.completedAt = new Date();
+  interview.report = { status: 'pending', requestedAt: new Date() };
   await interview.save();
   res.json({ interview });
+  // Analysis can take a while, so it runs after responding; the client polls for the report.
+  runEvaluation(interview._id);
+});
+
+const evaluateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: config.env === 'test' ? 1000 : 10,
+  keyGenerator: (req) => req.user.id,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many retries this hour. Please try again later.' },
+});
+
+// Retries the analysis when it failed or was interrupted.
+router.post('/:id/evaluate', evaluateLimiter, async (req, res) => {
+  const interview = await findOwnInterview(req);
+  if (interview.status !== 'completed') throw badRequest('Finish the interview before getting feedback');
+  const { report } = interview;
+  if (report?.status === 'ready') throw conflict('This interview already has feedback');
+  if (report?.status === 'pending' && !isStalePending(report)) throw conflict('Your feedback is still being prepared');
+
+  interview.report = { status: 'pending', requestedAt: new Date() };
+  await interview.save();
+  res.status(202).json({ interview });
+  runEvaluation(interview._id);
 });
 
 export default router;

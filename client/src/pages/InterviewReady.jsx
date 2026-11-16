@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, ChevronDown, Clock, FileText, Mic, PartyPopper
 import { api } from '../api.js';
 import { Orb, Spinner } from '../components/Brand.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
+import Report from './Report.jsx';
 import '../styles/ready.css';
 import '../styles/session.css';
 
@@ -87,6 +88,9 @@ export default function InterviewReady() {
     );
   }
   if (!interview) return <div className="app-content setup-loading"><Spinner dark /></div>;
+  if (interview.status === 'completed') {
+    return <Report interview={interview} onChange={setInterview} onDelete={remove} deleting={deleting} />;
+  }
 
   const { status, progress } = interview;
   const minutes = Math.round(interview.questions.length * 2.5);

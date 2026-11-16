@@ -69,7 +69,15 @@ export const defaultModels = () => [config.geminiModel, config.geminiFallbackMod
  * `prompt` is either text or an array of content parts (e.g. audio plus instructions).
  */
 export async function generateJson(
-  { system, prompt, schema, parse, temperature = 0.8, models: modelNames = defaultModels() },
+  {
+    system,
+    prompt,
+    schema,
+    parse,
+    temperature = 0.8,
+    models: modelNames = defaultModels(),
+    timeouts = [PRIMARY_TIMEOUT_MS, FALLBACK_TIMEOUT_MS],
+  },
   { client: injected } = {}
 ) {
   const ai = injected || getClient();
@@ -77,7 +85,7 @@ export async function generateJson(
     contents: typeof prompt === 'string' ? prompt : [{ role: 'user', parts: prompt }],
     config: { systemInstruction: system, responseMimeType: 'application/json', responseSchema: schema, temperature },
   };
-  const models = modelNames.map((name, i) => ({ name, timeout: i === 0 ? PRIMARY_TIMEOUT_MS : FALLBACK_TIMEOUT_MS }));
+  const models = modelNames.map((name, i) => ({ name, timeout: timeouts[Math.min(i, timeouts.length - 1)] }));
 
   let modelIndex = 0;
   let badOutputs = 0;
