@@ -1,0 +1,35 @@
+.ready-hero { margin-top: 12px; padding: 48px; display: flex; flex-wrap: wrap; gap: 48px; align-items: center; }
+.ready-copy { flex: 1 1 380px; min-width: 0; }
+.ready-copy h1 { font-size: clamp(2rem, 4vw, 2.8rem); letter-spacing: -0.03em; margin: 18px 0 8px; }
+.ready-role { font-size: 18px; font-weight: 600; color: var(--ink-2); }
+.ready-facts { list-style: none; padding: 0; margin: 24px 0 32px; display: flex; flex-direction: column; gap: 10px; color: var(--muted); }
+.ready-facts li { display: flex; align-items: center; gap: 10px; }
+.ready-facts svg { flex: none; color: var(--indigo); }
+.ready-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.ready-visual { flex: 0 1 240px; display: flex; justify-content: center; margin: 0 auto; }
+
+.ready-questions { margin-top: 20px; overflow: hidden; }
+.ready-toggle { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px 28px; min-height: 44px; background: none; border: 0; cursor: pointer; text-align: left; }
+.ready-toggle:hover { background: rgba(255, 255, 255, 0.4); }
+.ready-toggle svg { flex: none; color: var(--subtle); transition: transform 0.2s; }
+
+.q-list { list-style: none; margin: 0; padding: 0 28px 12px; }
+.q-row { display: flex; gap: 18px; padding: 20px 0; border-top: 1px solid rgba(234, 232, 226, 0.8); animation: rise 0.5s var(--ease) both; }
+.q-num { flex: none; width: 24px; font-size: 13px; font-weight: 700; color: var(--faint); padding-top: 3px; }
+.q-body { flex: 1; min-width: 0; }
+.q-text { font-size: 16px; font-weight: 600; line-height: 1.5; }
+.q-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.q-tags .pill { font-size: 12px; padding: 4px 10px; }
+.q-cat-technical { background: #e6eff7; color: #1f4f7a; }
+.q-cat-behavioural { background: #fbf1dc; color: #7a4f00; }
+.q-cat-hr { background: #fce7f3; color: #9d174d; }
+.q-points { margin-top: 10px; font-size: 14px; color: var(--muted); }
+.q-points summary { cursor: pointer; font-weight: 600; color: var(--indigo); min-height: 32px; display: inline-flex; align-items: center; }
+.q-points ul { margin: 6px 0 0; padding-left: 20px; line-height: 1.7; }
+
+@media (max-width: 640px) {
+  .ready-hero { padding: 28px 22px; gap: 24px; }
+  .ready-visual { display: none; }
+  .ready-toggle { padding: 18px 20px; }
+  .q-list { padding: 0 20px 8px; }
+}

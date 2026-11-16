@@ -9,6 +9,8 @@ import Landing from './pages/Landing.jsx';
 import AuthPage from './pages/AuthPage.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Resumes from './pages/Resumes.jsx';
+import NewInterview from './pages/NewInterview.jsx';
+import InterviewReady from './pages/InterviewReady.jsx';
 import { ComingSoon, NotFound, Settings } from './pages/Placeholders.jsx';
 
 createRoot(document.getElementById('root')).render(
@@ -21,7 +23,8 @@ createRoot(document.getElementById('root')).render(
           <Route path="/signup" element={<AuthPage mode="signup" />} />
           <Route path="/app" element={<RequireAuth><AppLayout /></RequireAuth>}>
             <Route index element={<Dashboard />} />
-            <Route path="new" element={<ComingSoon title="New interview" text="Resume upload and interview setup are coming next. You’ll be able to pick a role, style and difficulty here." />} />
+            <Route path="new" element={<NewInterview />} />
+            <Route path="interviews/:id" element={<InterviewReady />} />
             <Route path="history" element={<ComingSoon title="History" text="Your past interviews and their feedback reports will appear here." />} />
             <Route path="resumes" element={<Resumes />} />
             <Route path="settings" element={<Settings />} />

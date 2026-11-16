@@ -30,12 +30,25 @@ every answer using the Gemini API.
 
 - [x] **Phase 1** — Project setup, sign-up / sign-in, one-click demo account, app layout
 - [x] **Phase 2** — Resume upload (drag and drop, PDF/DOCX), text extraction, skill and section detection
-- [ ] **Phase 3** — Interview setup and Gemini question generation
+- [x] **Phase 3** — Interview setup and Gemini question generation (with built-in fallback questions)
 - [ ] **Phase 4** — Mock interview screen with voice recording
 - [ ] **Phase 5** — Speech-to-text and transcript review
 - [ ] **Phase 6** — Gemini answer evaluation and feedback report
 - [ ] **Phase 7** — Dashboard stats and interview history
 - [ ] **Phase 8** — Deploy (Render + Vercel + MongoDB Atlas)
+
+## How questions are generated
+
+- The resume text, role, optional company and job description are sent to Gemini with a **JSON response schema**, so
+  the model must return structured questions (text, category, topic, the resume item it's based on, and 3 points a
+  strong answer covers).
+- The output is **validated with Zod**: invalid or duplicate questions are dropped, and if too few remain the request
+  is retried once before failing with a clear error.
+- The resume and job description are wrapped in tags and the model is told to treat them as data, which guards
+  against **prompt injection** from pasted job descriptions.
+- Generation is **rate-limited per user** (15 an hour) to protect the API quota, falls back automatically to `gemini-3.5-flash-lite` when the main model is overloaded or slow, and every call has a timeout.
+- Without `GEMINI_API_KEY`, the app generates sensible questions from the resume's projects and skills, so local
+  development, CI and demos work with no key.
 
 ## Run locally
 

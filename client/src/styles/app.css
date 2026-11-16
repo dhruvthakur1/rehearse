@@ -36,6 +36,7 @@
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
 .page-head h1 { font-size: clamp(1.9rem, 3vw, 2.4rem); letter-spacing: -0.03em; }
 .page-head .muted { margin-bottom: 6px; font-weight: 500; font-size: 13px; }
+.page-head .page-sub { margin: 10px 0 0; font-size: 15px; font-weight: 400; max-width: 560px; }
 
 /* ---- Dashboard ---- */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 36px; }

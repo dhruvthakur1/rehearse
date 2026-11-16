@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import { config } from './config.js';
 import authRoutes from './routes/auth.js';
 import resumeRoutes from './routes/resumes.js';
+import interviewRoutes from './routes/interviews.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
 export function createApp() {
@@ -30,6 +31,7 @@ export function createApp() {
 
   app.use('/api/auth', authRoutes);
   app.use('/api/resumes', resumeRoutes);
+  app.use('/api/interviews', interviewRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

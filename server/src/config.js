@@ -22,6 +22,12 @@ export const config = {
     .split(',')
     .map((s) => s.trim().replace(/\/$/, ''))
     .filter(Boolean),
+  // Without a key, interviews use built-in sample questions so the app still works end to end.
+  geminiApiKey: process.env.GEMINI_API_KEY || '',
+  // Google retires older models for new API keys, so these are configurable without a code change.
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
+  // A fast, lighter model tried when the main one is overloaded, rate-limited or too slow.
+  geminiFallbackModel: process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-3.5-flash-lite',
 };
 
 if (isProd && !config.mongoUri) {
