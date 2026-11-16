@@ -26,11 +26,14 @@ function QuestionRow({ interview, q, showAnswer }) {
         {showAnswer && (
           <div className="q-answer">
             {q.answer?.hasAudio ? (
-              <AudioPlayer
-                fetchPath={`/interviews/${interview.id}/questions/${q.id}/audio`}
-                knownDuration={q.answer.durationSec}
-                label={`your answer to question ${q.order}`}
-              />
+              <>
+                <AudioPlayer
+                  fetchPath={`/interviews/${interview.id}/questions/${q.id}/audio`}
+                  knownDuration={q.answer.durationSec}
+                  label={`your answer to question ${q.order}`}
+                />
+                {q.answer.transcript && <blockquote className="q-transcript">{q.answer.transcript}</blockquote>}
+              </>
             ) : (
               <p className="small muted q-skipped"><SkipForward size={14} aria-hidden="true" /> Skipped</p>
             )}

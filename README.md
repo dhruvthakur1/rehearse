@@ -32,7 +32,7 @@ every answer using the Gemini API.
 - [x] **Phase 2** — Resume upload (drag and drop, PDF/DOCX), text extraction, skill and section detection
 - [x] **Phase 3** — Interview setup and Gemini question generation (with built-in fallback questions)
 - [x] **Phase 4** — Mock interview screen: mic check, questions read aloud, voice recording with live waveform, review and re-record
-- [ ] **Phase 5** — Speech-to-text and transcript review
+- [x] **Phase 5** — Speech-to-text: live captions while speaking, Gemini transcription of each recording, and an editable transcript to check before saving
 - [ ] **Phase 6** — Gemini answer evaluation and feedback report
 - [ ] **Phase 7** — Dashboard stats and interview history
 - [ ] **Phase 8** — Deploy (Render + Vercel + MongoDB Atlas)

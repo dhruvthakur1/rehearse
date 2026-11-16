@@ -129,3 +129,25 @@ button.s-item:hover { background: rgba(255, 255, 255, 0.6); }
   .s-review .s-actions { justify-content: stretch; }
   .s-review .s-actions .btn { flex: 1; }
 }
+
+/* ---- Transcripts (phase 5) ---- */
+.s-captions { width: 100%; border-radius: 18px; padding: 18px 20px; text-align: left; margin-bottom: 24px; }
+.s-captions-label { font-size: 12px; font-weight: 700; color: #be185d; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+.s-captions p { font-size: 16px; line-height: 1.7; color: var(--ink-2); max-height: 160px; overflow-y: auto; }
+.s-interim { color: var(--faint); }
+.s-caret { display: inline-block; width: 2px; height: 1.1em; background: var(--pink); vertical-align: text-bottom; margin-left: 3px; animation: blink 1s step-end infinite; }
+
+.s-processing { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 0 12px; }
+.s-processing h2 { font-size: 20px; margin: 28px 0 6px; }
+
+.s-review { display: flex; flex-direction: column; gap: 18px; }
+.s-review .s-actions { margin-top: 0; }
+.s-warning { background: var(--amber-soft); color: #5c3a00; }
+.s-transcript-field { gap: 6px; }
+.s-transcript-field .field-label { font-size: 16px; font-weight: 700; }
+.s-note { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+.s-note svg { flex: none; margin-top: 2px; color: var(--indigo); }
+.s-transcript { min-height: 170px; font-size: 16px; line-height: 1.7; margin-top: 6px; }
+.s-short { color: var(--amber); }
+.s-dot-pending { background: var(--indigo-soft); color: var(--indigo-dark); }
+.s-item-pending { color: var(--indigo-dark); }

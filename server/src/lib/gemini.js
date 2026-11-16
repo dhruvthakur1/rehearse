@@ -59,24 +59,25 @@ function toAppError(err, model) {
   return new AppError(502, 'The AI service is unavailable right now. Please try again.');
 }
 
+// The main model first, then the lighter fallback (unless they're the same).
+export const defaultModels = () => [config.geminiModel, config.geminiFallbackModel].filter((m, i, all) => m && all.indexOf(m) === i);
+
 /**
  * Asks Gemini for JSON matching `schema`, then validates it with `parse` (which should
- * throw on bad output). Falls back to a lighter model when the main one is overloaded or
- * slow, and retries once on malformed output, because models occasionally return
- * incomplete JSON.
+ * throw on bad output). Falls back to the next model when one is overloaded or slow, and
+ * retries once on malformed output, because models occasionally return incomplete JSON.
+ * `prompt` is either text or an array of content parts (e.g. audio plus instructions).
  */
-export async function generateJson({ system, prompt, schema, parse, temperature = 0.8 }, { client: injected } = {}) {
+export async function generateJson(
+  { system, prompt, schema, parse, temperature = 0.8, models: modelNames = defaultModels() },
+  { client: injected } = {}
+) {
   const ai = injected || getClient();
   const request = {
-    contents: prompt,
+    contents: typeof prompt === 'string' ? prompt : [{ role: 'user', parts: prompt }],
     config: { systemInstruction: system, responseMimeType: 'application/json', responseSchema: schema, temperature },
   };
-  const models = [
-    { name: config.geminiModel, timeout: PRIMARY_TIMEOUT_MS },
-    ...(config.geminiFallbackModel && config.geminiFallbackModel !== config.geminiModel
-      ? [{ name: config.geminiFallbackModel, timeout: FALLBACK_TIMEOUT_MS }]
-      : []),
-  ];
+  const models = modelNames.map((name, i) => ({ name, timeout: i === 0 ? PRIMARY_TIMEOUT_MS : FALLBACK_TIMEOUT_MS }));
 
   let modelIndex = 0;
   let badOutputs = 0;

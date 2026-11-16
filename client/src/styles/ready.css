@@ -40,3 +40,4 @@
 .ready-next svg { flex: none; margin-top: 3px; }
 .q-answer { margin-top: 14px; max-width: 520px; }
 .q-skipped { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: var(--amber-soft); color: var(--amber); font-weight: 600; }
+.q-transcript { margin: 10px 0 0; padding: 14px 18px; border-radius: 14px; background: rgba(255, 255, 255, 0.7); border: 1px solid var(--glass-border); font-size: 15px; line-height: 1.65; color: var(--ink-2); }

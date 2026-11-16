@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowRight, Check, Clock, FileText, Lightbulb, Mic, RotateCcw, SkipForward, Square, Volume2, VolumeX } from 'lucide-react';
+import { ArrowRight, Check, Clock, FileText, Lightbulb, Mic, RotateCcw, SkipForward, Sparkles, Square, Volume2, VolumeX } from 'lucide-react';
 import { api, uploadFile } from '../api.js';
 import { Blobs, FullPageSpinner, LogoMark, Orb, Spinner } from '../components/Brand.jsx';
 import Waveform from '../components/Waveform.jsx';
@@ -8,14 +8,28 @@ import AudioPlayer, { formatTime } from '../components/AudioPlayer.jsx';
 import MicCheck from '../components/MicCheck.jsx';
 import { MAX_RECORDING_SECONDS, useRecorder } from '../hooks/useRecorder.js';
 import { useSpeech } from '../hooks/useSpeech.js';
+import { useLiveTranscript } from '../hooks/useLiveTranscript.js';
 import '../styles/session.css';
 
 const TYPE_LABELS = { technical: 'Technical', behavioural: 'Behavioural', hr: 'HR', mixed: 'Mixed' };
+const MAX_TRANSCRIPT_CHARS = 6000;
 const extensionFor = (mime = '') => (mime.includes('mp4') ? 'm4a' : mime.includes('ogg') ? 'ogg' : 'webm');
+const wordCount = (text) => text.split(/\s+/).filter(Boolean).length;
+
+// A question is finished once it's skipped or its transcript has been checked.
+const isSettled = (q) => Boolean(q.answer?.confirmed);
 
 const firstOpenIndex = (questions) => {
-  const i = questions.findIndex((q) => !q.answer);
+  const i = questions.findIndex((q) => !isSettled(q));
   return i === -1 ? questions.length - 1 : i;
+};
+
+const SOURCE_NOTES = {
+  gemini: { icon: Sparkles, text: 'Transcribed by Gemini. Fix any words it misheard — this text is what gets evaluated.' },
+  browser: { icon: Mic, text: 'From your browser’s live captions. Check it carefully and fix any mistakes before continuing.' },
+  edited: { icon: Check, text: 'Your edited transcript. This is what gets evaluated.' },
+  typed: { icon: Check, text: 'Your typed answer. This is what gets evaluated.' },
+  '': { icon: FileText, text: 'We couldn’t transcribe this recording automatically. Type what you said so it can be evaluated.' },
 };
 
 function useElapsed() {
@@ -29,7 +43,7 @@ function useElapsed() {
 }
 
 function QuestionList({ questions, index, onSelect }) {
-  const done = questions.filter((q) => q.answer).length;
+  const done = questions.filter(isSettled).length;
   return (
     <section className="card s-list">
       <div className="s-list-head">
@@ -38,14 +52,14 @@ function QuestionList({ questions, index, onSelect }) {
       </div>
       <ol>
         {questions.map((q, i) => {
-          const state = i === index ? 'current' : q.answer ? (q.answer.skipped ? 'skipped' : 'done') : 'upcoming';
-          const clickable = state === 'done' || state === 'skipped';
+          const state = i === index ? 'current' : isSettled(q) ? (q.answer.skipped ? 'skipped' : 'done') : q.answer ? 'pending' : 'upcoming';
+          const clickable = state !== 'current' && state !== 'upcoming';
           const content = (
             <>
               <span className={`s-dot s-dot-${state}`}>
                 {state === 'done' ? <Check size={14} strokeWidth={3} aria-label="Answered" /> : state === 'skipped' ? <SkipForward size={13} aria-label="Skipped" /> : i + 1}
               </span>
-              <span className="s-item-text">{state === 'upcoming' ? 'Upcoming' : q.topic}</span>
+              <span className="s-item-text">{state === 'upcoming' ? 'Upcoming' : state === 'pending' ? `${q.topic} · check transcript` : q.topic}</span>
             </>
           );
           return (
@@ -73,8 +87,12 @@ export default function Session() {
   const [busy, setBusy] = useState(null); // starting | saving | skipping | finishing
   const [actionError, setActionError] = useState(null);
   const [showHint, setShowHint] = useState(false);
+  // The take being processed: uploading → transcribing → review (or failed).
+  const [take, setTake] = useState(null);
+  const [transcript, setTranscript] = useState('');
   const recorder = useRecorder();
   const speech = useSpeech();
+  const live = useLiveTranscript();
   const elapsed = useElapsed();
 
   useEffect(() => {
@@ -90,14 +108,18 @@ export default function Session() {
   const question = interview?.questions[index];
   const { reset: resetRecorder } = recorder;
   const { speak, cancel: cancelSpeech, enabled: speechEnabled } = speech;
+  const { reset: resetLive, stop: stopLive } = live;
 
-  // Each new question: clear the previous take and read it aloud.
+  // Each new question: clear any previous take, load an existing answer, and read it aloud.
   useEffect(() => {
     if (stage !== 'interview' || !question) return;
     resetRecorder();
+    resetLive();
+    setTake(null);
+    setTranscript(question.answer?.transcript || '');
     setShowHint(false);
     setActionError(null);
-    if (speechEnabled) speak(question.text);
+    if (speechEnabled && !question.answer) speak(question.text);
   }, [stage, question?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => cancelSpeech, [cancelSpeech]);
@@ -126,26 +148,83 @@ export default function Session() {
     }
   }, [id, navigate]);
 
-  // Moves to the next unanswered question, or finishes when none are left.
+  // Moves to the next unfinished question, or finishes when none are left.
   function advance(updated) {
     setInterview(updated);
-    const next = updated.questions.findIndex((q, i) => i > index && !q.answer);
-    const earlier = updated.questions.findIndex((q) => !q.answer);
-    const target = next !== -1 ? next : earlier;
+    const next = updated.questions.findIndex((q, i) => i > index && !isSettled(q));
+    const target = next !== -1 ? next : updated.questions.findIndex((q) => !isSettled(q));
     if (target === -1) finish();
     else setIndex(target);
   }
 
-  async function saveAnswer() {
-    const { blob, durationSec, mimeType } = recorder.recording;
+  // After recording stops: upload the take, then ask Gemini to transcribe it.
+  const processTake = useCallback(
+    async (recording, browserTranscript) => {
+      setActionError(null);
+      setTake({ phase: 'uploading' });
+      let updated;
+      try {
+        ({ interview: updated } = await uploadFile(`/interviews/${id}/questions/${question.id}/answer`, recording.blob, {
+          method: 'PUT',
+          field: 'audio',
+          filename: `answer.${extensionFor(recording.mimeType)}`,
+          fields: { durationSec: Math.max(1, Math.round(recording.durationSec)), browserTranscript },
+        }));
+        setInterview(updated);
+      } catch (err) {
+        setTake({ phase: 'failed', error: err.message });
+        return;
+      }
+
+      setTake({ phase: 'transcribing' });
+      try {
+        ({ interview: updated } = await api(`/interviews/${id}/questions/${question.id}/transcribe`, { method: 'POST' }));
+        setInterview(updated);
+        const answer = updated.questions[index].answer;
+        setTranscript(answer.transcript);
+        setTake({ phase: 'review', source: answer.transcriptSource });
+      } catch (err) {
+        // The recording is saved; fall back to the live captions or typing.
+        setTranscript(browserTranscript);
+        setTake({ phase: 'review', source: browserTranscript ? 'browser' : '', warning: err.message });
+      }
+    },
+    [id, question?.id, index] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  useEffect(() => {
+    if (recorder.status === 'recorded' && recorder.recording && !take) {
+      processTake(recorder.recording, live.text);
+    }
+  }, [recorder.status, recorder.recording]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function startRecording() {
+    cancelSpeech();
+    setTake(null);
+    setActionError(null);
+    live.start();
+    recorder.start();
+  }
+
+  function stopRecording() {
+    stopLive();
+    recorder.stop();
+  }
+
+  function rerecord() {
+    resetRecorder();
+    resetLive();
+    setTake(null);
+    setActionError(null);
+  }
+
+  async function saveTranscript() {
     setBusy('saving');
     setActionError(null);
     try {
-      const { interview: updated } = await uploadFile(`/interviews/${id}/questions/${question.id}/answer`, blob, {
-        method: 'PUT',
-        field: 'audio',
-        filename: `answer.${extensionFor(mimeType)}`,
-        fields: { durationSec: Math.max(1, Math.round(durationSec)) },
+      const { interview: updated } = await api(`/interviews/${id}/questions/${question.id}/transcript`, {
+        method: 'PATCH',
+        body: { text: transcript },
       });
       advance(updated);
     } catch (err) {
@@ -157,6 +236,7 @@ export default function Session() {
 
   async function skip() {
     cancelSpeech();
+    stopLive();
     setBusy('skipping');
     setActionError(null);
     try {
@@ -167,11 +247,6 @@ export default function Session() {
     } finally {
       setBusy(null);
     }
-  }
-
-  function startRecording() {
-    cancelSpeech();
-    recorder.start();
   }
 
   if (loadError) {
@@ -185,9 +260,29 @@ export default function Session() {
   if (!interview) return <FullPageSpinner />;
 
   const total = interview.questions.length;
-  const doneCount = interview.questions.filter((q) => q.answer).length;
-  const isLast = interview.questions.filter((q) => !q.answer).length <= 1 && !question.answer;
+  const doneCount = interview.questions.filter(isSettled).length;
+  const remainingQuestions = interview.questions.filter((q) => !isSettled(q)).length;
+  const isLast = remainingQuestions <= 1 && !isSettled(question);
   const remaining = MAX_RECORDING_SECONDS - recorder.elapsed;
+
+  // What the answer card shows.
+  const hasSavedAnswer = question && question.answer && !question.answer.skipped && question.answer.hasAudio;
+  let view;
+  if (recorder.status === 'recording') view = 'recording';
+  else if (recorder.status === 'error') view = 'error';
+  else if (take && take.phase !== 'review') view = take.phase; // uploading | transcribing | failed
+  else if (take?.phase === 'review' || (hasSavedAnswer && recorder.status === 'idle')) view = 'review';
+  else view = 'idle';
+
+  const source = take?.source ?? question?.answer?.transcriptSource ?? '';
+  const note = SOURCE_NOTES[source] || SOURCE_NOTES[''];
+  const NoteIcon = note.icon;
+  const words = wordCount(transcript);
+  const stepState = (n) => {
+    const order = { idle: 1, recording: 1, error: 1, uploading: 2, transcribing: 2, failed: 2, review: 2 };
+    const current = order[view];
+    return n < current ? 'is-done' : n === current ? 'is-active' : '';
+  };
 
   return (
     <div className="page session">
@@ -227,7 +322,7 @@ export default function Session() {
                 </div>
                 {speech.supported && (
                   <div className="s-q-voice">
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => speak(question.text)} disabled={recorder.status === 'recording'}>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => speak(question.text)} disabled={view === 'recording'}>
                       <Volume2 size={16} aria-hidden="true" /> Replay
                     </button>
                     <button type="button" className="icon-btn" onClick={() => speech.setEnabled(!speech.enabled)}
@@ -245,55 +340,106 @@ export default function Session() {
 
             <section className="card s-answer rise d1">
               <div className="s-steps" aria-label="Answer steps">
-                <span className={`s-step ${recorder.status === 'recorded' ? 'is-done' : 'is-active'}`}>1 · Speak</span>
-                <span className={`s-step ${recorder.status === 'recorded' ? 'is-active' : ''}`}>2 · Review</span>
-                <span className="s-step">3 · Next question</span>
+                <span className={`s-step ${stepState(1)}`}>1 · Speak</span>
+                <span className={`s-step ${stepState(2)}`}>2 · Check transcript</span>
+                <span className={`s-step ${stepState(3)}`}>3 · Next question</span>
               </div>
 
-              {(recorder.status === 'idle' || recorder.status === 'requesting') && (
+              {view === 'idle' && (
                 <div className="s-idle">
                   <button type="button" className="mic-btn" onClick={startRecording} disabled={recorder.status === 'requesting' || Boolean(busy)}
                     aria-label="Start recording your answer">
                     {recorder.status === 'requesting' ? <Spinner /> : <Mic size={46} strokeWidth={1.8} aria-hidden="true" />}
                   </button>
-                  <h2>{question.answer && !question.answer.skipped ? 'Record a new answer' : 'Tap the mic and answer out loud'}</h2>
-                  <p className="muted">Speak naturally, as you would to an interviewer. Aim for 1–2 minutes{question.answer && !question.answer.skipped ? ' — this replaces your earlier answer' : ''}.</p>
+                  <h2>Tap the mic and answer out loud</h2>
+                  <p className="muted">Speak naturally, as you would to an interviewer. Aim for 1–2 minutes. We’ll turn it into text you can check.</p>
                   <button type="button" className="btn btn-ghost btn-sm s-skip" onClick={skip} disabled={Boolean(busy)}>
                     {busy === 'skipping' ? <Spinner dark /> : <><SkipForward size={16} aria-hidden="true" /> Skip this question</>}
                   </button>
                 </div>
               )}
 
-              {recorder.status === 'recording' && (
+              {view === 'recording' && (
                 <div className="s-recording">
                   <div className="s-live" role="status">
                     <span className="s-live-dot" aria-hidden="true" /> Recording · <span className="s-mono">{formatTime(recorder.elapsed)}</span>
                     {remaining <= 30 && <span className="s-warn"> · {Math.ceil(remaining)}s left</span>}
                   </div>
                   <Waveform getAnalyser={recorder.getAnalyser} />
+                  {live.supported && (
+                    <div className="glass s-captions" aria-live="polite">
+                      <div className="s-captions-label">Live captions</div>
+                      <p>
+                        {live.finalText}
+                        {live.interimText && <span className="s-interim"> {live.interimText}</span>}
+                        {!live.text && <span className="muted">Start speaking — your words will appear here.</span>}
+                        <span className="s-caret" aria-hidden="true" />
+                      </p>
+                    </div>
+                  )}
                   <div className="s-actions">
-                    <button type="button" className="btn btn-ghost" onClick={recorder.reset}><RotateCcw size={16} aria-hidden="true" /> Start over</button>
-                    <button type="button" className="btn btn-stop" onClick={recorder.stop}><Square size={14} fill="currentColor" aria-hidden="true" /> Stop &amp; review</button>
+                    <button type="button" className="btn btn-ghost" onClick={rerecord}><RotateCcw size={16} aria-hidden="true" /> Start over</button>
+                    <button type="button" className="btn btn-stop" onClick={stopRecording}><Square size={14} fill="currentColor" aria-hidden="true" /> Stop &amp; check</button>
                   </div>
                 </div>
               )}
 
-              {recorder.status === 'recorded' && (
+              {(view === 'uploading' || view === 'transcribing') && (
+                <div className="s-processing" role="status" aria-live="polite">
+                  <Orb size={88} />
+                  <h2>{view === 'uploading' ? 'Saving your recording…' : 'Turning your answer into text…'}</h2>
+                  <p className="muted">{view === 'uploading' ? 'This only takes a moment.' : 'Usually takes a few seconds.'}</p>
+                </div>
+              )}
+
+              {view === 'failed' && (
+                <div className="mic-error" role="alert">
+                  <Mic size={20} aria-hidden="true" />
+                  <div>
+                    <p>We couldn’t save that recording: {take.error}</p>
+                    <div className="s-actions" style={{ justifyContent: 'flex-start', marginTop: 12 }}>
+                      <button type="button" className="btn btn-ghost" onClick={() => processTake(recorder.recording, live.text)}>Try saving again</button>
+                      <button type="button" className="btn btn-ghost" onClick={rerecord}>Record again</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {view === 'review' && (
                 <div className="s-review">
-                  <h2>Listen back to your answer</h2>
-                  <p className="muted">Happy with it? Save it and move on. You can come back and re-record any answer before finishing.</p>
-                  <AudioPlayer src={recorder.recording.url} knownDuration={recorder.recording.durationSec} />
+                  {take?.warning && <div className="alert s-warning" role="status">{take.warning}</div>}
+                  <AudioPlayer
+                    key={recorder.recording?.url || question.id}
+                    src={recorder.recording?.url}
+                    fetchPath={recorder.recording ? undefined : `/interviews/${id}/questions/${question.id}/audio`}
+                    knownDuration={recorder.recording?.durationSec || question.answer?.durationSec}
+                  />
+                  <div className="field s-transcript-field">
+                    <label className="field-label" htmlFor="transcript">Check your transcript</label>
+                    <p className="s-note"><NoteIcon size={15} aria-hidden="true" /> {note.text}</p>
+                    <textarea
+                      id="transcript"
+                      className="input textarea s-transcript"
+                      rows={7}
+                      value={transcript}
+                      onChange={(e) => setTranscript(e.target.value)}
+                      maxLength={MAX_TRANSCRIPT_CHARS}
+                      placeholder="Type what you said…"
+                    />
+                  </div>
                   <div className="s-actions">
-                    <span className="small s-saved-note"><Check size={14} aria-hidden="true" /> {formatTime(recorder.recording.durationSec)} recorded</span>
-                    <button type="button" className="btn btn-ghost" onClick={recorder.reset} disabled={Boolean(busy)}><RotateCcw size={16} aria-hidden="true" /> Re-record</button>
-                    <button type="button" className="btn btn-primary" onClick={saveAnswer} disabled={Boolean(busy)}>
+                    <span className={`small s-saved-note ${words < 15 ? 's-short' : ''}`}>
+                      <Check size={14} aria-hidden="true" /> {words} words{words > 0 && words < 15 ? ' · a bit short' : ''}
+                    </span>
+                    <button type="button" className="btn btn-ghost" onClick={rerecord} disabled={Boolean(busy)}><RotateCcw size={16} aria-hidden="true" /> Re-record</button>
+                    <button type="button" className="btn btn-primary" onClick={saveTranscript} disabled={Boolean(busy) || !transcript.trim()}>
                       {busy === 'saving' || busy === 'finishing' ? <Spinner /> : <>{isLast ? 'Save & finish' : 'Save & next'} <ArrowRight size={18} aria-hidden="true" /></>}
                     </button>
                   </div>
                 </div>
               )}
 
-              {recorder.status === 'error' && (
+              {view === 'error' && (
                 <div className="mic-error" role="alert">
                   <Mic size={20} aria-hidden="true" />
                   <div>

@@ -9,6 +9,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
 import { MAX_ANSWER_SECONDS, MAX_AUDIO_BYTES, detectAudioFormat } from '../lib/audio.js';
+import { MAX_TRANSCRIPT_CHARS, transcribeAnswer } from '../lib/transcribe.js';
 import { DIFFICULTIES, INTERVIEW_TYPES, QUESTION_COUNTS, generateQuestions } from '../lib/questions.js';
 import { aiEnabled } from '../lib/gemini.js';
 import { config } from '../config.js';
@@ -161,8 +162,69 @@ router.put('/:id/questions/:qid/answer', async (req, res) => {
     data: req.file.buffer,
   });
 
-  question.answer = { skipped: false, audio: audio._id, mimeType, durationSec: Math.round(durationSec), sizeBytes: req.file.size, recordedAt: new Date() };
+  // The browser's live transcript (where supported) is kept as a starting point and fallback.
+  const browserTranscript = String(req.body.browserTranscript || '').trim().slice(0, MAX_TRANSCRIPT_CHARS);
+  question.answer = {
+    skipped: false,
+    audio: audio._id,
+    mimeType,
+    durationSec: Math.round(durationSec),
+    sizeBytes: req.file.size,
+    recordedAt: new Date(),
+    transcript: browserTranscript,
+    transcriptSource: browserTranscript ? 'browser' : '',
+  };
   markStarted(interview);
+  await interview.save();
+  res.json({ interview });
+});
+
+// Each transcription is an AI call on up to 5 minutes of audio, so cap it per account.
+const transcribeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: config.env === 'test' ? 1000 : 80,
+  keyGenerator: (req) => req.user.id,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'You’ve transcribed a lot of answers this hour. Type this answer, or try again later.' },
+});
+
+router.post('/:id/questions/:qid/transcribe', transcribeLimiter, async (req, res) => {
+  const interview = await findOwnInterview(req);
+  assertNotCompleted(interview);
+  const question = findQuestion(interview, req.params.qid);
+  const audio = question.answer?.audio && (await AnswerAudio.findOne({ _id: question.answer.audio, user: req.user._id }));
+  if (!audio) throw badRequest('Record an answer before transcribing it');
+
+  const transcript = await transcribeAnswer({ audio: audio.data, mimeType: audio.mimeType, questionText: question.text });
+  if (transcript !== null) {
+    question.answer.transcript = transcript;
+    question.answer.transcriptSource = 'gemini';
+    await interview.save();
+  }
+  res.json({ interview, aiTranscribed: transcript !== null });
+});
+
+const transcriptSchema = z.object({
+  text: z
+    .string()
+    .trim()
+    .min(1, 'Add your answer before continuing')
+    .max(MAX_TRANSCRIPT_CHARS, `Keep the answer under ${MAX_TRANSCRIPT_CHARS.toLocaleString('en-IN')} characters`),
+});
+
+// Saves the transcript the user has checked (and possibly corrected), confirming the answer.
+router.patch('/:id/questions/:qid/transcript', validate(transcriptSchema), async (req, res) => {
+  const interview = await findOwnInterview(req);
+  assertNotCompleted(interview);
+  const question = findQuestion(interview, req.params.qid);
+  if (!question.answer || question.answer.skipped) throw badRequest('Record an answer for this question first');
+
+  const { text } = req.valid.body;
+  const answer = question.answer;
+  if (text !== answer.transcript) answer.transcriptSource = answer.transcript ? 'edited' : 'typed';
+  answer.transcript = text;
+  answer.confirmedAt = new Date();
   await interview.save();
   res.json({ interview });
 });

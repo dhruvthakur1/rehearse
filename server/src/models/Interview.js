@@ -9,6 +9,11 @@ const answerSchema = new mongoose.Schema(
     durationSec: Number,
     sizeBytes: Number,
     recordedAt: { type: Date, default: Date.now },
+    // What gets evaluated: Gemini's transcript, the browser's live one, or the user's own edit.
+    transcript: { type: String, default: '' },
+    transcriptSource: { type: String, enum: ['gemini', 'browser', 'edited', 'typed', ''], default: '' },
+    // Set when the user has checked the transcript and moved on.
+    confirmedAt: Date,
   },
   { _id: false }
 );
@@ -58,7 +63,17 @@ interviewSchema.set('toJSON', {
       id: _id.toString(),
       ...q,
       // The audio's database id stays internal; clients fetch it through the question's audio URL.
-      answer: answer ? { skipped: answer.skipped, hasAudio: Boolean(answer.audio), durationSec: answer.durationSec, recordedAt: answer.recordedAt } : null,
+      answer: answer
+        ? {
+            skipped: answer.skipped,
+            hasAudio: Boolean(answer.audio),
+            durationSec: answer.durationSec,
+            recordedAt: answer.recordedAt,
+            transcript: answer.transcript || '',
+            transcriptSource: answer.transcriptSource || '',
+            confirmed: answer.skipped || Boolean(answer.confirmedAt),
+          }
+        : null,
     }));
     const answered = ret.questions?.filter((q) => q.answer) ?? [];
     ret.progress = {
