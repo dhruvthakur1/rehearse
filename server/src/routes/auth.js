@@ -7,6 +7,7 @@ import { requireAuth, signToken } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { conflict, unauthorized } from '../lib/errors.js';
 import { config } from '../config.js';
+import { ensureDemoContent } from '../lib/demoData.js';
 
 const router = Router();
 
@@ -61,6 +62,8 @@ router.post('/demo', authLimiter, async (_req, res) => {
       passwordHash: await User.hashPassword(crypto.randomBytes(32).toString('hex')),
     });
   }
+  // Visitors should land on a dashboard with history and a finished report to explore.
+  await ensureDemoContent(user);
   res.json({ token: signToken(user), user });
 });
 

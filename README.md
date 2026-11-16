@@ -34,7 +34,7 @@ every answer using the Gemini API.
 - [x] **Phase 4** — Mock interview screen: mic check, questions read aloud, voice recording with live waveform, review and re-record
 - [x] **Phase 5** — Speech-to-text: live captions while speaking, Gemini transcription of each recording, and an editable transcript to check before saving
 - [x] **Phase 6** — Gemini evaluation (4 skills per answer, server-computed scores) and the feedback report with model answers
-- [ ] **Phase 7** — Dashboard stats and interview history
+- [x] **Phase 7** — Live dashboard (scores, trend, skills, streak), interview history with filters and search, and a pre-filled demo account
 - [ ] **Phase 8** — Deploy (Render + Vercel + MongoDB Atlas)
 
 ## How questions are generated

@@ -12,7 +12,8 @@ import Resumes from './pages/Resumes.jsx';
 import NewInterview from './pages/NewInterview.jsx';
 import InterviewReady from './pages/InterviewReady.jsx';
 import Session from './pages/Session.jsx';
-import { ComingSoon, NotFound, Settings } from './pages/Placeholders.jsx';
+import History from './pages/History.jsx';
+import { NotFound, Settings } from './pages/Placeholders.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -28,7 +29,7 @@ createRoot(document.getElementById('root')).render(
             <Route index element={<Dashboard />} />
             <Route path="new" element={<NewInterview />} />
             <Route path="interviews/:id" element={<InterviewReady />} />
-            <Route path="history" element={<ComingSoon title="History" text="Your past interviews and their feedback reports will appear here." />} />
+            <Route path="history" element={<History />} />
             <Route path="resumes" element={<Resumes />} />
             <Route path="settings" element={<Settings />} />
           </Route>

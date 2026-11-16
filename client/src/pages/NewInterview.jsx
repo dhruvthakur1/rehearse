@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Check, FileText, Info, Mic } from 'lucide-react';
 import { api } from '../api.js';
 import { Orb, Spinner } from '../components/Brand.jsx';
@@ -53,6 +53,9 @@ function GeneratingOverlay() {
 
 export default function NewInterview() {
   const navigate = useNavigate();
+  // The dashboard's "Practise it" link can preselect a style (e.g. ?type=behavioural).
+  const [params] = useSearchParams();
+  const presetType = TYPES.some((t) => t.value === params.get('type')) ? params.get('type') : 'technical';
   const [resumes, setResumes] = useState(null);
   const [meta, setMeta] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -61,7 +64,7 @@ export default function NewInterview() {
     role: '',
     company: '',
     jobDescription: '',
-    type: 'technical',
+    type: presetType,
     difficulty: 'medium',
     questionCount: 8,
   });

@@ -6,24 +6,10 @@ import { Orb, Spinner } from '../components/Brand.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
 import '../styles/report.css';
 
-const TYPE_LABELS = { technical: 'Technical', behavioural: 'Behavioural', hr: 'HR', mixed: 'Mixed' };
-const SKILL_LABELS = { relevance: 'Relevance', depth: 'Depth', clarity: 'Clarity', structure: 'Structure' };
-const SKILL_HINTS = {
-  relevance: 'Answering what was asked',
-  depth: 'Substance, reasoning and trade-offs',
-  clarity: 'Easy to follow, precise wording',
-  structure: 'A logical order with a clear point',
-};
+import { SKILL_HINTS, SKILL_LABELS, TYPE_LABELS, capitalise, scoreTone } from '../scoring.js';
+
 const POLL_MS = 2500;
 const RING = 2 * Math.PI * 52;
-
-// Colour bands for scores out of 10.
-export function scoreTone(score) {
-  if (score >= 8) return 'good';
-  if (score >= 6.5) return 'ok';
-  if (score >= 5) return 'fair';
-  return 'low';
-}
 
 const formatDate = (iso) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -182,8 +168,7 @@ export default function Report({ interview, onChange, onDelete, deleting }) {
     }
   }
 
-  const difficulty = interview.difficulty.charAt(0).toUpperCase() + interview.difficulty.slice(1);
-  const meta = [TYPE_LABELS[interview.type], difficulty, `${interview.questions.length} questions`, interview.completedAt && formatDate(interview.completedAt), durationText(interview)]
+  const meta = [TYPE_LABELS[interview.type], capitalise(interview.difficulty), `${interview.questions.length} questions`, interview.completedAt && formatDate(interview.completedAt), durationText(interview)]
     .filter(Boolean)
     .join(' · ');
 
@@ -236,7 +221,7 @@ export default function Report({ interview, onChange, onDelete, deleting }) {
               <p className="small muted report-basis">
                 Based on {report.answeredCount} answered question{report.answeredCount === 1 ? '' : 's'}
                 {interview.progress.skipped ? ` · ${interview.progress.skipped} skipped` : ''}
-                {report.generatedBy === 'gemini' ? ' · Reviewed by Gemini' : ' · Quick built-in review'}
+                {{ gemini: ' · Reviewed by Gemini', demo: ' · Example report for the demo account', sample: ' · Quick built-in review' }[report.generatedBy] ?? ''}
               </p>
             </div>
             <div className="report-skills">

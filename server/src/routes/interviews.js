@@ -74,9 +74,24 @@ router.post('/', generateLimiter, validate(createSchema), async (req, res) => {
   res.status(201).json({ interview });
 });
 
-router.get('/', async (req, res) => {
-  const interviews = await Interview.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(100);
-  res.json({ interviews });
+const listSchema = z.object({
+  status: z.enum(['ready', 'in_progress', 'completed']).optional(),
+  q: z.string().trim().max(80).optional(),
+});
+
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Lightweight summaries for the History page (no questions, answers or feedback).
+router.get('/', validate(listSchema, 'query'), async (req, res) => {
+  const { status, q } = req.valid.query;
+  const filter = { user: req.user._id };
+  if (status) filter.status = status;
+  if (q) {
+    const re = new RegExp(escapeRegex(q), 'i');
+    filter.$or = [{ role: re }, { company: re }];
+  }
+  const interviews = await Interview.find(filter).sort({ createdAt: -1 }).limit(200);
+  res.json({ interviews: interviews.map((i) => i.toSummary()) });
 });
 
 async function findOwnInterview(req) {

@@ -37,7 +37,7 @@ const evaluationSchema = new mongoose.Schema(
 const reportSchema = new mongoose.Schema(
   {
     status: { type: String, enum: ['pending', 'ready', 'failed'], default: 'pending' },
-    generatedBy: { type: String, enum: ['gemini', 'sample'] },
+    generatedBy: { type: String, enum: ['gemini', 'sample', 'demo'] },
     overallScore: Number,
     verdict: String,
     skills: skillsSchema,
@@ -81,13 +81,37 @@ const interviewSchema = new mongoose.Schema(
     difficulty: { type: String, enum: DIFFICULTIES, required: true },
     questions: { type: [questionSchema], validate: (v) => v.length > 0 },
     status: { type: String, enum: ['ready', 'in_progress', 'completed'], default: 'ready', index: true },
-    generatedBy: { type: String, enum: ['gemini', 'sample'], required: true },
+    generatedBy: { type: String, enum: ['gemini', 'sample', 'demo'], required: true },
     startedAt: Date,
     completedAt: Date,
     report: { type: reportSchema, default: undefined },
   },
   { timestamps: true }
 );
+
+// A light version for lists (dashboard, history): no questions, answers or feedback text.
+interviewSchema.methods.toSummary = function toSummary() {
+  const answered = this.questions.filter((q) => q.answer && !q.answer.skipped).length;
+  const settled = this.questions.filter((q) => q.answer && (q.answer.skipped || q.answer.confirmedAt)).length;
+  const report = this.report;
+  return {
+    id: this.id,
+    role: this.role,
+    company: this.company,
+    type: this.type,
+    difficulty: this.difficulty,
+    status: this.status,
+    resumeTitle: this.resumeTitle,
+    questionCount: this.questions.length,
+    answered,
+    settled,
+    score: report?.status === 'ready' ? report.overallScore : null,
+    reportStatus: report?.status ?? null,
+    createdAt: this.createdAt,
+    startedAt: this.startedAt,
+    completedAt: this.completedAt,
+  };
+};
 
 interviewSchema.set('toJSON', {
   transform: (_doc, ret) => {
