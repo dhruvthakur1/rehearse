@@ -33,3 +33,10 @@
   .ready-toggle { padding: 18px 20px; }
   .q-list { padding: 0 20px 8px; }
 }
+
+/* ---- Completed interviews ---- */
+.ready-done-pill { background: var(--green-soft); color: var(--green); }
+.ready-next { display: flex; align-items: flex-start; gap: 8px; }
+.ready-next svg { flex: none; margin-top: 3px; }
+.q-answer { margin-top: 14px; max-width: 520px; }
+.q-skipped { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: var(--amber-soft); color: var(--amber); font-weight: 600; }

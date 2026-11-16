@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard.jsx';
 import Resumes from './pages/Resumes.jsx';
 import NewInterview from './pages/NewInterview.jsx';
 import InterviewReady from './pages/InterviewReady.jsx';
+import Session from './pages/Session.jsx';
 import { ComingSoon, NotFound, Settings } from './pages/Placeholders.jsx';
 
 createRoot(document.getElementById('root')).render(
@@ -21,6 +22,8 @@ createRoot(document.getElementById('root')).render(
           <Route path="/" element={<Landing />} />
           <Route path="/signin" element={<AuthPage mode="signin" />} />
           <Route path="/signup" element={<AuthPage mode="signup" />} />
+          {/* The interview itself is full-screen, without the sidebar. */}
+          <Route path="/app/interviews/:id/session" element={<RequireAuth><Session /></RequireAuth>} />
           <Route path="/app" element={<RequireAuth><AppLayout /></RequireAuth>}>
             <Route index element={<Dashboard />} />
             <Route path="new" element={<NewInterview />} />

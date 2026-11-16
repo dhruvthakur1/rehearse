@@ -21,10 +21,10 @@ export class ApiError extends Error {
 }
 
 // Multipart upload with progress (fetch can't report upload progress).
-export function uploadFile(path, file, { field = 'file', onProgress } = {}) {
+export function uploadFile(path, file, { field = 'file', fields = {}, method = 'POST', filename, onProgress } = {}) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${BASE_URL}/api${path}`);
+    xhr.open(method, `${BASE_URL}/api${path}`);
     const token = tokenStore.get();
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
@@ -44,9 +44,20 @@ export function uploadFile(path, file, { field = 'file', onProgress } = {}) {
     };
 
     const form = new FormData();
-    form.append(field, file);
+    // Text fields go first so the server has them by the time the file arrives.
+    Object.entries(fields).forEach(([key, value]) => form.append(key, String(value)));
+    if (filename) form.append(field, file, filename);
+    else form.append(field, file);
     xhr.send(form);
   });
+}
+
+// Downloads an authenticated file (e.g. a recording) as a Blob; <audio src> can't send our token.
+export async function fetchBlob(path) {
+  const token = tokenStore.get();
+  const res = await fetch(`${BASE_URL}/api${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, res.status === 404 ? 'Recording not found' : 'Could not load the recording');
+  return res.blob();
 }
 
 export async function api(path, { method = 'GET', body } = {}) {

@@ -33,12 +33,12 @@ export function Blobs() {
 const ORB_BARS = [0.4, 0.7, 1, 0.7, 0.4];
 const ORB_DELAYS = [-0.9, -0.6, -0.3, -0.75, -0.45];
 
-// The animated "AI interviewer". Bar sizes scale with the orb.
-export function Orb({ size = 168 }) {
+// The animated "AI interviewer". Bar sizes scale with the orb; `quiet` calms it while it isn't speaking.
+export function Orb({ size = 168, quiet = false }) {
   const barHeight = size * 0.35;
   const barWidth = Math.max(3, Math.round(size / 24));
   return (
-    <div className="orb" style={{ width: size, height: size, gap: barWidth }} aria-hidden="true">
+    <div className={`orb ${quiet ? 'is-quiet' : ''}`} style={{ width: size, height: size, gap: barWidth }} aria-hidden="true">
       {ORB_BARS.map((scale, i) => (
         <span
           key={i}

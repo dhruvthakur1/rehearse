@@ -1,11 +1,14 @@
 import { Router } from 'express';
+import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { Interview } from '../models/Interview.js';
+import { AnswerAudio } from '../models/AnswerAudio.js';
 import { Resume } from '../models/Resume.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
-import { notFound } from '../lib/errors.js';
+import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
+import { MAX_ANSWER_SECONDS, MAX_AUDIO_BYTES, detectAudioFormat } from '../lib/audio.js';
 import { DIFFICULTIES, INTERVIEW_TYPES, QUESTION_COUNTS, generateQuestions } from '../lib/questions.js';
 import { aiEnabled } from '../lib/gemini.js';
 import { config } from '../config.js';
@@ -86,8 +89,117 @@ router.get('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   const interview = await findOwnInterview(req);
+  await AnswerAudio.deleteMany({ interview: interview._id });
   await interview.deleteOne();
   res.status(204).end();
+});
+
+// ---- Taking the interview ----
+
+const uploadAudio = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_AUDIO_BYTES, files: 1, fields: 5 },
+}).single('audio');
+
+function receiveAudio(req, res) {
+  return new Promise((resolve, reject) => {
+    uploadAudio(req, res, (err) => {
+      if (!err) return resolve();
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return reject(new AppError(413, 'That recording is too large. Keep answers under 5 minutes.'));
+      }
+      if (err instanceof multer.MulterError) return reject(badRequest('Send the recording in the “audio” field'));
+      reject(err);
+    });
+  });
+}
+
+function assertNotCompleted(interview) {
+  if (interview.status === 'completed') throw conflict('This interview is already finished');
+}
+
+function findQuestion(interview, questionId) {
+  const question = interview.questions.id(questionId);
+  if (!question) throw notFound('Question not found');
+  return question;
+}
+
+function markStarted(interview) {
+  if (interview.status === 'ready') {
+    interview.status = 'in_progress';
+    interview.startedAt = new Date();
+  }
+}
+
+router.post('/:id/start', async (req, res) => {
+  const interview = await findOwnInterview(req);
+  assertNotCompleted(interview);
+  markStarted(interview);
+  await interview.save();
+  res.json({ interview });
+});
+
+router.put('/:id/questions/:qid/answer', async (req, res) => {
+  await receiveAudio(req, res);
+  const interview = await findOwnInterview(req);
+  assertNotCompleted(interview);
+  const question = findQuestion(interview, req.params.qid);
+
+  if (!req.file) throw badRequest('Record an answer before saving');
+  const mimeType = detectAudioFormat(req.file.buffer);
+  const durationSec = Number(req.body.durationSec);
+  if (!Number.isFinite(durationSec) || durationSec < 1) throw badRequest('That recording is too short — try answering again');
+  if (durationSec > MAX_ANSWER_SECONDS) throw badRequest('Answers can be at most 5 minutes long');
+
+  // Re-recording replaces the previous take.
+  if (question.answer?.audio) await AnswerAudio.deleteOne({ _id: question.answer.audio });
+  const audio = await AnswerAudio.create({
+    user: req.user._id,
+    interview: interview._id,
+    question: question._id,
+    mimeType,
+    data: req.file.buffer,
+  });
+
+  question.answer = { skipped: false, audio: audio._id, mimeType, durationSec: Math.round(durationSec), sizeBytes: req.file.size, recordedAt: new Date() };
+  markStarted(interview);
+  await interview.save();
+  res.json({ interview });
+});
+
+router.post('/:id/questions/:qid/skip', async (req, res) => {
+  const interview = await findOwnInterview(req);
+  assertNotCompleted(interview);
+  const question = findQuestion(interview, req.params.qid);
+  if (question.answer?.audio) await AnswerAudio.deleteOne({ _id: question.answer.audio });
+  question.answer = { skipped: true, recordedAt: new Date() };
+  markStarted(interview);
+  await interview.save();
+  res.json({ interview });
+});
+
+router.get('/:id/questions/:qid/audio', async (req, res) => {
+  const interview = await findOwnInterview(req);
+  const question = findQuestion(interview, req.params.qid);
+  const audio = question.answer?.audio && (await AnswerAudio.findOne({ _id: question.answer.audio, user: req.user._id }));
+  if (!audio) throw notFound('No recording for this question');
+  res.set({ 'Content-Type': audio.mimeType, 'Content-Length': audio.data.length, 'Cache-Control': 'private, max-age=3600' });
+  res.send(audio.data);
+});
+
+router.post('/:id/finish', async (req, res) => {
+  const interview = await findOwnInterview(req);
+  assertNotCompleted(interview);
+  if (!interview.questions.some((q) => q.answer && !q.answer.skipped)) {
+    throw badRequest('Answer at least one question before finishing');
+  }
+  for (const q of interview.questions) {
+    if (!q.answer) q.answer = { skipped: true, recordedAt: new Date() };
+  }
+  interview.status = 'completed';
+  interview.completedAt = new Date();
+  await interview.save();
+  res.json({ interview });
 });
 
 export default router;
