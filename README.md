@@ -1,65 +1,106 @@
-# Rehearse — AI Interview Practice
+# Rehearse
 
-Rehearse turns your resume into a realistic mock interview. It writes questions about your own projects and
-experience, lets you **answer out loud** (speech is transcribed so you can check it), and gives detailed feedback on
-every answer using the Gemini API.
+![CI](https://github.com/dhruvthakur1/rehearse/actions/workflows/ci.yml/badge.svg)
 
-> 🚧 In progress — being built in small phases. See [the roadmap](#roadmap).
+Practise interviews out loud, with questions written about **your** resume.
+
+You upload your resume and pick a role. Rehearse asks you questions about your own projects and experience, you answer
+by speaking into your mic, and you get honest, specific feedback on every answer, including what a stronger answer
+would have covered.
+
+> **Live demo:** coming soon (it'll be on Render and Vercel). Until then it runs locally in two commands; see
+> [Running it locally](#running-it-locally).
+
+---
+
+## Why I built it
+
+Most interview prep tools hand you the same generic list: "tell me about yourself", "what's your biggest weakness".
+Real interviews aren't like that. The interviewer has your resume open and asks *why you chose MongoDB for that
+project* or *what broke when you deployed it*.
+
+I also noticed I could write a decent answer but struggled to *say* it, because typing gives you time to think and
+speaking doesn't. So Rehearse makes you answer out loud, then shows you exactly what you said.
+
+## How a session works
+
+1. **Upload your resume** (PDF or DOCX). Rehearse pulls out the text, your skills and your projects.
+2. **Set up the interview:** the role, and optionally the company and job description. Choose technical, behavioural,
+   HR or mixed questions, easy, medium or hard, and 5, 8 or 10 questions.
+3. **Gemini writes the questions**, each tied to something on your resume, plus the points a strong answer would hit.
+4. **Answer out loud.** A quick mic check, then each question is read to you. You record your answer while a live
+   waveform and captions show it's picking you up, and you can re-record if you fumble.
+5. **Check the transcript.** Each recording is transcribed, and you can fix anything it misheard before saving.
+6. **Get the report.** Every answer is scored on four skills (relevance, depth, clarity and structure), with what you
+   did well, what to fix and a model answer to compare against.
+7. **Track progress.** The dashboard shows your average score, a trend over time, your weakest skill and your practice
+   streak. Every past interview is searchable in your history.
+
+There's a one-click **demo account** with three finished interviews already in it, so you can see the full report and
+dashboard without recording anything.
+
+## The interesting parts
+
+**Questions that stay on track.** Gemini returns questions against a strict JSON schema, then the server validates them
+with Zod: broken or duplicate questions are dropped, and the request retries once if too few survive. Your resume and
+any pasted job description are clearly marked as data, so a job description containing "ignore your instructions" can't
+hijack the interviewer.
+
+**Voice, end to end.** The browser records with MediaRecorder (WebM/Opus) and draws the waveform with the Web Audio API.
+Live captions use the browser's speech recognition while you talk. After you stop, the recording goes to Gemini for an
+accurate transcript, which is the one that actually gets graded. Answers are capped at 5 minutes and 10 MB.
+
+**Scores you can trust.** Gemini judges each skill, but the server works out the overall score itself from those
+judgements, so the numbers on your report are consistent. Evaluation runs in the background, and the report page shows
+progress until it's ready.
+
+**Doesn't fall over when the AI does.** Every Gemini call has a timeout. If the main model is overloaded, it falls back
+to a lighter one automatically. Question generation is rate-limited per user to protect the quota. With no API key at
+all, it still works, using built-in questions based on your resume, so local development and CI need no key.
+
+**Careful with files.** Resumes are processed in memory and never written to disk. The server checks a file's actual
+bytes, not just its extension, so a renamed file can't sneak through. Scanned, image-only PDFs are caught with a clear
+message instead of producing an empty interview.
 
 ## Tech stack
 
-| Layer    | Tech                                                         |
-| -------- | ------------------------------------------------------------ |
-| Frontend | React 18, React Router, Vite, lucide icons                   |
-| Backend  | Node.js, Express 5, Mongoose, Zod validation, Helmet, rate limiting |
-| Data     | MongoDB                                                      |
-| AI       | Gemini API (question generation, transcription, evaluation)  |
-| Files    | Multer (in-memory uploads), unpdf (PDF text), mammoth (DOCX text) |
-| DevOps   | Docker, GitHub Actions CI                                    |
+| | |
+|---|---|
+| Frontend | React 18, React Router, Vite, lucide icons; MediaRecorder, Web Audio and Web Speech APIs |
+| Backend | Node.js, Express 5, Mongoose, Zod, Helmet, rate limiting |
+| AI | Google Gemini for question generation, transcription and evaluation |
+| Files | Multer (in memory), unpdf for PDFs, mammoth for DOCX |
+| Database | MongoDB |
+| Testing | Vitest, Supertest, an in-memory MongoDB (66 tests) |
+| DevOps | Docker, GitHub Actions, Render and Vercel config |
 
-## How resume upload works
+## Running it locally
 
-1. The browser checks the file type and size, then uploads it with a progress bar.
-2. The API keeps the file in memory only (never on disk), checks the file's real signature bytes so a renamed file
-   can't sneak through, and extracts the text with `unpdf` (PDF) or `mammoth` (DOCX).
-3. Scanned, image-only PDFs are detected (no text layer) and rejected with a helpful message.
-4. Only the extracted text is stored, with detected skills and resume sections. The full text is returned only by
-   `GET /api/resumes/:id`, never in lists.
-
-## Roadmap
-
-- [x] **Phase 1** — Project setup, sign-up / sign-in, one-click demo account, app layout
-- [x] **Phase 2** — Resume upload (drag and drop, PDF/DOCX), text extraction, skill and section detection
-- [x] **Phase 3** — Interview setup and Gemini question generation (with built-in fallback questions)
-- [x] **Phase 4** — Mock interview screen: mic check, questions read aloud, voice recording with live waveform, review and re-record
-- [x] **Phase 5** — Speech-to-text: live captions while speaking, Gemini transcription of each recording, and an editable transcript to check before saving
-- [x] **Phase 6** — Gemini evaluation (4 skills per answer, server-computed scores) and the feedback report with model answers
-- [x] **Phase 7** — Live dashboard (scores, trend, skills, streak), interview history with filters and search, and a pre-filled demo account
-- [ ] **Phase 8** — Deploy (Render + Vercel + MongoDB Atlas)
-
-## How questions are generated
-
-- The resume text, role, optional company and job description are sent to Gemini with a **JSON response schema**, so
-  the model must return structured questions (text, category, topic, the resume item it's based on, and 3 points a
-  strong answer covers).
-- The output is **validated with Zod**: invalid or duplicate questions are dropped, and if too few remain the request
-  is retried once before failing with a clear error.
-- The resume and job description are wrapped in tags and the model is told to treat them as data, which guards
-  against **prompt injection** from pasted job descriptions.
-- Generation is **rate-limited per user** (15 an hour) to protect the API quota, falls back automatically to `gemini-3.5-flash-lite` when the main model is overloaded or slow, and every call has a timeout.
-- Without `GEMINI_API_KEY`, the app generates sensible questions from the resume's projects and skills, so local
-  development, CI and demos work with no key.
-
-## Run locally
-
-Requires Node.js 20+. Without `MONGODB_URI` the API uses a throwaway in-memory MongoDB, so no setup is needed.
+You need Node.js 20 or newer. With no `MONGODB_URI` the API uses a throwaway in-memory database, and with no
+`GEMINI_API_KEY` it uses built-in questions and sample feedback, so it works straight away.
 
 ```bash
 cd server && npm install && npm run dev     # API on http://localhost:4000
-cd client && npm install && npm run dev     # App on http://localhost:5173
-cd server && npm test                       # API tests
+cd client && npm install && npm run dev     # app on http://localhost:5173
+cd server && npm test
 ```
 
-## Deploy
+For real AI questions and feedback, get a free key from [Google AI Studio](https://aistudio.google.com/apikey) and put it
+in `server/.env` as `GEMINI_API_KEY` (copy `server/.env.example` to start). Use Chrome or Edge for live captions; the
+other browsers still record and transcribe fine.
 
-See [DEPLOY.md](DEPLOY.md) — GitHub → Render (Docker API) → Vercel (frontend), with MongoDB Atlas and the Gemini API.
+## Deploying
+
+[DEPLOY.md](DEPLOY.md) covers it step by step: MongoDB Atlas, then the API on Render (Docker), the frontend on Vercel,
+and the Gemini key on Render.
+
+## What I'd add next
+
+- Follow-up questions that react to what you just said, like a real interviewer
+- Filler-word and speaking-pace feedback ("you said 'basically' 14 times")
+- Practising against a specific job posting from a link
+- Sharing a report with a mentor
+
+---
+
+Built by [Dhruv Thakur](https://github.com/dhruvthakur1).
