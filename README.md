@@ -11,6 +11,21 @@ would have covered.
 > **Live demo:** coming soon (it'll be on Render and Vercel). Until then it runs locally in two commands; see
 > [Running it locally](#running-it-locally).
 
+![Answering a question out loud, with a live waveform](docs/screenshots/session.png)
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/screenshots/report.png" alt="Interview report with scores per skill and feedback per answer"></td>
+    <td width="33%"><img src="docs/screenshots/dashboard.png" alt="Dashboard with score trend, skill breakdown and streak"></td>
+    <td width="33%"><img src="docs/screenshots/landing.png" alt="Landing page"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Feedback report</sub></td>
+    <td align="center"><sub>Dashboard</sub></td>
+    <td align="center"><sub>Landing page</sub></td>
+  </tr>
+</table>
+
 ---
 
 ## Why I built it
